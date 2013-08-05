@@ -6,17 +6,10 @@ using System.Collections.Generic;
 
 public class EditorIconViewer : EditorWindow
 {
-	public class IconData
-	{
-		public int index;
-		public GUIStyle style;
-		public Texture2D texture;
-	}
-	
 	public class IconGroup
 	{
 		public string name;
-		public IconData[] iconData;
+		public GUIStyle[] iconData;
 		public float iconWidthThreshold;
 		public float maxWidth;
 	}
@@ -70,7 +63,9 @@ public class EditorIconViewer : EditorWindow
 		"If additional style states are available (such as Focused, Hover, or Active), they will appear in the panel when selected.";
 	
 	protected GUISkin _editorSkin;
-	protected IconData _selectedIcon;
+	protected GUIStyle _selectedIcon;
+  protected Vector2 _scrollPos;
+  protected float _drawScale;
 	
 	[MenuItem("Tools/Editor Icons")]
     static void Init()
@@ -81,9 +76,12 @@ public class EditorIconViewer : EditorWindow
 	
 	void OnEnable()
 	{
-		iconGroups = new List<IconGroup>();
-		_editorSkin = EditorGUIUtility.GetBuiltinSkin(EditorSkin.Inspector);
-		
+    _editorSkin = EditorGUIUtility.GetBuiltinSkin(EditorSkin.Inspector);
+    _scrollPos = Vector2.zero;
+    SetSelectedIcon(null);
+
+    iconGroups = new List<IconGroup>();
+
 		for (int i = 0; i < kIconGroupNames.Length; ++i)
 		{
 			IconGroup group = new IconGroup();
@@ -104,24 +102,17 @@ public class EditorIconViewer : EditorWindow
 					
 					return true;
 				})
-			.Select(style => new IconData
-			{
-				style = style,
-				texture = style.normal.background
-			}).OrderBy(iconData => iconData.texture.height).ToArray();
+			.OrderBy(style => style.normal.background.height).ToArray();
 			
 			float maxWidth = 0;
-			foreach (IconData icon in group.iconData)
-				maxWidth = (icon.texture.width > maxWidth) ? icon.texture.width : maxWidth;
+			foreach (GUIStyle style in group.iconData)
+				maxWidth = (style.normal.background.width > maxWidth) ? style.normal.background.width : maxWidth;
 			group.maxWidth = maxWidth;
 			
 			iconGroups.Add(group);
 		}
-		
-		SetSelectedIcon(null);
 	}
 	
-	protected Vector2 _scrollPos = Vector2.zero;
 	void OnGUI()
 	{
 		float sidePanelWidth = CalculateSidePanelWidth();
@@ -150,22 +141,23 @@ public class EditorIconViewer : EditorWindow
 		return Mathf.Clamp(position.width * 0.21f, kSidePanelMinWidth, kSidePanelMaxWidth);
 	}
 	
-	protected float _drawScale = 1.0f;
-	protected void DrawIconDisplay(IconData icon)
+	protected void DrawIconDisplay(GUIStyle style)
 	{
-		if (icon == null)
+		if (style == null)
 		{
 			DrawCenteredMessage("No icon selected");
 			GUILayout.FlexibleSpace();
 			DrawHelpIcon();
 			return;
 		}
+
+    Texture2D iconTexture = style.normal.background;
 		
 		EditorGUILayout.BeginVertical();
 		
 		EditorGUILayout.BeginHorizontal();
 		GUILayout.FlexibleSpace();
-		GUILayout.Label(icon.style.name, EditorStyles.whiteLargeLabel);
+		GUILayout.Label(style.name, EditorStyles.whiteLargeLabel);
 		GUILayout.FlexibleSpace();
 		EditorGUILayout.EndHorizontal();
 		
@@ -176,10 +168,10 @@ public class EditorIconViewer : EditorWindow
 		EditorGUILayout.EndHorizontal();
 		
 		float iconOffset = 45;
-		float iconWidth = icon.texture.width * _drawScale;
-		float iconHeight = icon.texture.height * _drawScale;
+		float iconWidth = iconTexture.width * _drawScale;
+		float iconHeight = iconTexture.height * _drawScale;
 		float sidePanelWidth = CalculateSidePanelWidth();
-		GUI.DrawTexture(new Rect((sidePanelWidth - iconWidth) * 0.5f, iconOffset, iconWidth, iconHeight), icon.texture, ScaleMode.StretchToFill);
+		GUI.DrawTexture(new Rect((sidePanelWidth - iconWidth) * 0.5f, iconOffset, iconWidth, iconHeight), iconTexture, ScaleMode.StretchToFill);
 		GUILayout.Space(iconHeight + 10);
 		
 		EditorGUILayout.BeginHorizontal();
@@ -199,14 +191,14 @@ public class EditorIconViewer : EditorWindow
 		
 		GUILayout.Space(10);
 		
-		DrawIconStyleState(icon.style.active, "Active");
-		DrawIconStyleState(icon.style.hover, "Hover");
-		DrawIconStyleState(icon.style.focused, "Focused");
+		DrawIconStyleState(style.active, "Active");
+		DrawIconStyleState(style.hover, "Hover");
+		DrawIconStyleState(style.focused, "Focused");
 		
 		GUILayout.Space(10);
 		
-		EditorGUILayout.LabelField(string.Format("Width:      {0}px", icon.texture.width));
-		EditorGUILayout.LabelField(string.Format("Height:    {0}px", icon.texture.height));
+		EditorGUILayout.LabelField(string.Format("Width:      {0}px", iconTexture.width));
+		EditorGUILayout.LabelField(string.Format("Height:    {0}px", iconTexture.height));
 		
 		GUILayout.FlexibleSpace();
 		DrawHelpIcon();
@@ -232,17 +224,17 @@ public class EditorIconViewer : EditorWindow
 		EditorGUILayout.EndHorizontal();
 	}
 	
-	protected void SetSelectedIcon(IconData icon)
+	protected void SetSelectedIcon(GUIStyle icon)
 	{
 		_selectedIcon = icon;
 		_drawScale = 1.0f;
 	}
 	
-	protected void DrawIconSelectionGrid(IconData[] icons, float maxIconWidth)
+	protected void DrawIconSelectionGrid(GUIStyle[] icons, float maxIconWidth)
 	{
 		float sidePanelWidth = CalculateSidePanelWidth();
 		int xCount = Mathf.FloorToInt((position.width - sidePanelWidth - kScrollbarWidth) / (maxIconWidth + kSelectionGridPadding));
-		int selected = GUILayout.SelectionGrid(-1, icons.Select(data => data.texture).ToArray(), xCount, GUI.skin.box);
+		int selected = GUILayout.SelectionGrid(-1, icons.Select(style => style.normal.background).ToArray(), xCount, GUI.skin.box);
 		
 		if (selected > -1)
 		{
